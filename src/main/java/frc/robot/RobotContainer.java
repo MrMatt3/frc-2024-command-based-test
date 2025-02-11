@@ -1,5 +1,8 @@
 package frc.robot;
 
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.ParallelCommandGroup;
+
 // import frc.robot.commands.Autos;
 
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
@@ -44,8 +47,12 @@ public class RobotContainer {
     manipulatorController.leftBumper().whileTrue(new EjectCommand(intakeSubsystem, shooterSubsystem));
   }
   // Returns the command to run during autonomous
-  //public Command getAutonomousCommand() {
-    // An example command will be run in autonomous
-  //   return Autos.exampleAuto(m_exampleSubsystem);
-  // }
+  public Command getAutonomousCommand() {
+    // return new ParallelCommandGroup(
+    //   new ArcadeDriveCommand(driveBaseSubsystem, () -> 0.3, () -> 0.0, () -> 0.0, () -> 0.0).withTimeout(3),
+    //   new IntakeCommand(intakeSubsystem, () -> 1.0).withTimeout(3),
+    //   new ShootCommand(shooterSubsystem, () -> 1.0).withTimeout(3)
+    // );
+    return new ArcadeDriveCommand(driveBaseSubsystem, () -> 0.3, () -> 0.0, () -> 0.0, () -> 0.0).withTimeout(4);
+  }
 }

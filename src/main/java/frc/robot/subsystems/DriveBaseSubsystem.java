@@ -32,6 +32,10 @@ public class DriveBaseSubsystem extends SubsystemBase {
         setCurrentLimits();
         setFollowers();
         configurePID();
+
+        SparkMaxConfig rightInvert = new SparkMaxConfig();
+        rightInvert.inverted(true);
+        frMotor.configure(rightInvert, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
     }
 
     // Makes the PID continuous at 0/360 and sets the tolerance to 2
@@ -76,7 +80,7 @@ public class DriveBaseSubsystem extends SubsystemBase {
 
     // Drives the robot forward/backwards at a specified speed and turns at a specified turn speed
     public void driveMotors(double speed, double rotation) {
-        d_drive.arcadeDrive(rotation, speed);
+        d_drive.arcadeDrive(speed, rotation);
     }
 
     // Returns the robot heading (0 - 180/-180) from the gyroscope and gets the mirror value if the robot is driving backwards
