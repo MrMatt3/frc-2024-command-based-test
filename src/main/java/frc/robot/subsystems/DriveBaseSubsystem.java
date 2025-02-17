@@ -2,13 +2,20 @@ package frc.robot.subsystems;
 
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.estimator.DifferentialDrivePoseEstimator;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.ADIS16470_IMU;
+
 import com.revrobotics.spark.SparkMax;
+import com.revrobotics.RelativeEncoder;
 import com.revrobotics.spark.SparkBase.PersistMode;
 import com.revrobotics.spark.SparkBase.ResetMode;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
+
 import com.revrobotics.spark.config.SparkMaxConfig;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.PIDConstants;
@@ -19,12 +26,25 @@ public class DriveBaseSubsystem extends SubsystemBase {
     private final SparkMax frMotor = new SparkMax(DriveConstants.frontRightMotorPort, MotorType.kBrushless);
     private final SparkMax blMotor = new SparkMax(DriveConstants.backLeftMotorPort, MotorType.kBrushless);
     private final SparkMax brMotor = new SparkMax(DriveConstants.backRightMotorPort, MotorType.kBrushless);
+    // Encoders of the front left and right motors
+    private final RelativeEncoder lEncoder = flMotor.getEncoder();
+    private final RelativeEncoder rEncoder = frMotor.getEncoder();
     // Differential drive base object made of the front left and right motors
     private final DifferentialDrive d_drive = new DifferentialDrive(flMotor, frMotor);
     // Gyroscope from the ADIS16470 IMU
     private final ADIS16470_IMU gyroscope = new ADIS16470_IMU();
+    // PID for note alignment
+    private final PIDController alignPID = new PIDController(PIDConstants.alignKP, PIDConstants.alignKI, PIDConstants.alignKD);
     // PID for fieldcentric driving
-    private final PIDController PID = new PIDController(PIDConstants.kP, PIDConstants.kI, PIDConstants.kD);
+    private final PIDController drivePID = new PIDController(PIDConstants.driveKP, PIDConstants.driveKI, PIDConstants.driveKD);
+    // Pose estimator
+    private final DifferentialDrivePoseEstimator poseEstimator = new DifferentialDrivePoseEstimator(
+        DriveConstants.kinematics,
+        Rotation2d.fromDegrees(getAngle(false)),
+        lEncoder.getPosition() * DriveConstants.rotationToMeters,
+        rEncoder.getPosition() * DriveConstants.rotationToMeters,
+        new Pose2d()
+    );
 
     // Creates a new ShooterSubsystem.
     public DriveBaseSubsystem() {
@@ -32,12 +52,24 @@ public class DriveBaseSubsystem extends SubsystemBase {
         setCurrentLimits();
         setFollowers();
         configurePID();
+        configureEncoders();
     }
 
-    // Makes the PID continuous at 0/360 and sets the tolerance to 2
+    // Sets the conversion factor and resets the positions of the encoders back to 0
+    public void configureEncoders() {
+        SparkMaxConfig conversionFactor = new SparkMaxConfig();
+        conversionFactor.encoder.positionConversionFactor(DriveConstants.rotationToMeters);
+        flMotor.configure(conversionFactor, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
+        frMotor.configure(conversionFactor, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
+
+        lEncoder.setPosition(0);
+        rEncoder.setPosition(0);
+    }
+
+    // Makes the PID continuous at -180/180 and sets the tolerance to 2
     private void configurePID() {
-        PID.enableContinuousInput(-180, 180);
-        PID.setTolerance(PIDConstants.tolerance);
+        drivePID.enableContinuousInput(-180, 180);
+        drivePID.setTolerance(PIDConstants.tolerance);
     }
 
     // Makes the back left and right motors followers of the front right and left motors
@@ -94,12 +126,45 @@ public class DriveBaseSubsystem extends SubsystemBase {
         }
     }
 
+    // Returns the raw value from the gyroscope
     public double getRawAngle() {
         return gyroscope.getAngle();
     }
 
+    // Returns the drive PID
+    public PIDController getDrivePID() {
+        return drivePID;
+    }
+
+    // Returns the note alignment PID
+    public PIDController getAlignPID() {
+        return alignPID;
+    } 
+
     // Returns an amount of motor effort/speed to turn based on the distance between the robot heading and a target point (0-360°) using the PID
     public double angleToRotation(double target, boolean backwards) {
-        return PID.calculate(getAngle(backwards), target);
+        return drivePID.calculate(getAngle(backwards), target);
+    }
+
+    // Returns the position of the robot
+    public Pose2d getRobotPose() {
+        return poseEstimator.getEstimatedPosition();
+    }
+
+    // Periodically updates the pose estimator with odometry
+    @Override
+    public void periodic() {
+      poseEstimator.update(
+        Rotation2d.fromDegrees(getAngle(false)),
+        lEncoder.getPosition(),
+        rEncoder.getPosition() * -1
+      );
+
+      SmartDashboard.putNumber("X", poseEstimator.getEstimatedPosition().getX());
+      SmartDashboard.putNumber("Y", poseEstimator.getEstimatedPosition().getY());
+      SmartDashboard.putNumber("Rotation", poseEstimator.getEstimatedPosition().getRotation().getDegrees());
+
+      SmartDashboard.putNumber("Left Encoder Rotations", lEncoder.getPosition());
+      SmartDashboard.putNumber("Right Encoder Position", rEncoder.getPosition());
     }
 }
